@@ -35,10 +35,11 @@ class FocusDetector extends AccessibilityDetector {
   }
 
   bool _hasFocusSupport(RenderObject handler) {
-    // Focus widgets expose themselves to semantics as "focusable".
+    // Focus widgets annotate semantics with their `focused` state, which is
+    // only set on focusable nodes.
     for (final ancestor in RenderTreeUtils.ancestors(handler, maxDepth: 12)) {
       if (ancestor is RenderSemanticsAnnotations &&
-          ancestor.properties.focusable == true) {
+          ancestor.properties.focused != null) {
         return true;
       }
     }
@@ -47,7 +48,7 @@ class FocusDetector extends AccessibilityDetector {
       (node) =>
           node is RenderEditable ||
           (node is RenderSemanticsAnnotations &&
-              node.properties.focusable == true),
+              node.properties.focused != null),
       maxDepth: 8,
     )) {
       return true;

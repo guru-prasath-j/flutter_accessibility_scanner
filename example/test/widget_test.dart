@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_accessibility_scanner/flutter_accessibility_scanner.dart';
 import 'package:flutter_accessibility_scanner_example/main.dart';
 import 'package:flutter_test/flutter_test.dart';

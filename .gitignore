@@ -30,3 +30,6 @@ build/
 
 # Example lockfile
 /example/pubspec.lock
+*.jsonl
+pana.json
+analysis.txt

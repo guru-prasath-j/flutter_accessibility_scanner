@@ -56,12 +56,18 @@ jobs:
 
       - name: Test package
         if: always()
-        run: flutter test --reporter github
+        run: |
+          set +e
+          flutter test --machine > test-results.jsonl
+          python3 .github/report_tests.py test-results.jsonl
 
       - name: Test example
         if: always()
         working-directory: example
-        run: flutter test --reporter github
+        run: |
+          set +e
+          flutter test --machine > test-results.jsonl
+          python3 ../.github/report_tests.py test-results.jsonl
 
       - name: Pub dry run
         if: always()
