@@ -120,7 +120,8 @@ class RenderTreeUtils {
   static Size effectiveTapSize(RenderBox handler) {
     var width = handler.size.width;
     var height = handler.size.height;
-    for (final ancestor in ancestors(handler, maxDepth: 6)) {
+    for (final ancestor in ancestors(handler, maxDepth: 24)) {
+      if (isTapHandler(ancestor)) break;
       if (ancestor is RenderBox &&
           ancestor.hasSize &&
           ancestor.runtimeType.toString().contains('InputPadding')) {
