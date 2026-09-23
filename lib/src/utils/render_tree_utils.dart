@@ -5,12 +5,19 @@ import 'package:flutter/widgets.dart';
 class RenderTreeUtils {
   const RenderTreeUtils._();
 
-  /// Whether [node] is a gesture handler that reacts to taps or long presses,
-  /// which is what `GestureDetector`, `InkWell` and every Material button
-  /// create under the hood.
-  static bool isTapHandler(RenderObject node) =>
-      node is RenderSemanticsGestureHandler &&
-      (node.onTap != null || node.onLongPress != null);
+  /// Whether [node] is where a tappable element exposes its tap or long-press
+  /// action: the gesture handler a `GestureDetector` creates, or the
+  /// `Semantics(onTap: ...)` that `InkWell` and every Material button add.
+  static bool isTapHandler(RenderObject node) {
+    if (node is RenderSemanticsGestureHandler) {
+      return node.onTap != null || node.onLongPress != null;
+    }
+    if (node is RenderSemanticsAnnotations) {
+      final p = node.properties;
+      return p.onTap != null || p.onLongPress != null;
+    }
+    return false;
+  }
 
   /// Walks up from [node] (exclusive), at most [maxDepth] levels.
   static Iterable<RenderObject> ancestors(
