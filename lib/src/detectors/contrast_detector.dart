@@ -53,8 +53,9 @@ class ContrastDetector extends AccessibilityDetector {
       background,
       isLargeText: isLargeText,
     );
-    final required =
-        isLargeText ? ColorContrastUtils.wcagAALarge : ColorContrastUtils.wcagAA;
+    final required = isLargeText
+        ? ColorContrastUtils.wcagAALarge
+        : ColorContrastUtils.wcagAA;
     final what = isIcon ? 'Icon' : 'Text';
 
     return [
@@ -80,7 +81,8 @@ class ContrastDetector extends AccessibilityDetector {
           'isLargeText': isLargeText,
           'isIcon': isIcon,
           'requiredRatio': required,
-          if (!isIcon) 'text': plain.length > 60 ? plain.substring(0, 60) : plain,
+          if (!isIcon)
+            'text': plain.length > 60 ? plain.substring(0, 60) : plain,
         },
       ),
     ];
@@ -90,8 +92,7 @@ class ContrastDetector extends AccessibilityDetector {
   (Color, bool) _estimateBackground(RenderObject node) {
     final layers = <Color>[];
     Color? base;
-    for (final ancestor
-        in RenderTreeUtils.ancestors(node, maxDepth: 1 << 30)) {
+    for (final ancestor in RenderTreeUtils.ancestors(node, maxDepth: 1 << 30)) {
       final color = _paintedColor(ancestor);
       if (color == null || color.a == 0) continue;
       if (color.a >= 1) {

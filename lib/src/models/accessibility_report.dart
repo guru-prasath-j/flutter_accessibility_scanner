@@ -65,8 +65,7 @@ class AccessibilityReport {
       'timestamp': timestamp.toIso8601String(),
       'totalIssues': totalIssues,
       if (scannedElements != null) 'scannedElements': scannedElements,
-      if (scanDuration != null)
-        'scanDurationMs': scanDuration!.inMilliseconds,
+      if (scanDuration != null) 'scanDurationMs': scanDuration!.inMilliseconds,
       'issuesBySeverity': {
         for (final s in AccessibilityIssueSeverity.values.reversed)
           s.name: bySeverity[s]?.length ?? 0,

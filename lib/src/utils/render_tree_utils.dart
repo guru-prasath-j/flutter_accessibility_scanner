@@ -60,7 +60,10 @@ class RenderTreeUtils {
       return true;
     }
     if (node is RenderParagraph) {
-      return node.text.toPlainText(includeSemanticsLabels: true).trim().isNotEmpty;
+      return node.text
+          .toPlainText(includeSemanticsLabels: true)
+          .trim()
+          .isNotEmpty;
     }
     if (node is RenderEditable) return true;
     return false;

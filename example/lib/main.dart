@@ -45,7 +45,8 @@ class _MyHomePageState extends State<MyHomePage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Bad: tiny, unlabeled button', style: theme.textTheme.titleSmall),
+          Text('Bad: tiny, unlabeled button',
+              style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
@@ -80,7 +81,8 @@ class _MyHomePageState extends State<MyHomePage> {
             style: TextStyle(color: Colors.grey[400]),
           ),
           const SizedBox(height: 20),
-          Text('Good: AccessibilityFixerText', style: theme.textTheme.titleSmall),
+          Text('Good: AccessibilityFixerText',
+              style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           AccessibilityFixerText(
             text: 'This text is darkened just enough to pass WCAG AA',

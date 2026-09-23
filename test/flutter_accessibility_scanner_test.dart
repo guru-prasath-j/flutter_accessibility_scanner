@@ -50,7 +50,8 @@ void main() {
 
     test('default scanner is shared, custom scanners are not', () {
       expect(identical(AccessibilityScanner(), AccessibilityScanner()), isTrue);
-      final custom = AccessibilityScanner(detectors: const [TapTargetDetector()]);
+      final custom =
+          AccessibilityScanner(detectors: const [TapTargetDetector()]);
       expect(identical(custom, AccessibilityScanner()), isFalse);
       expect(custom.detectors, hasLength(1));
     });
@@ -198,7 +199,8 @@ void main() {
           ),
         ),
       );
-      expect(report.issuesOfType(AccessibilityIssueType.smallTapTarget), isEmpty);
+      expect(
+          report.issuesOfType(AccessibilityIssueType.smallTapTarget), isEmpty);
     });
 
     testWidgets('minimumSize is configurable', (tester) async {
@@ -249,7 +251,8 @@ void main() {
         tester,
         Container(
           color: Colors.white,
-          child: Text('Hard to read', style: TextStyle(color: Colors.grey[300])),
+          child:
+              Text('Hard to read', style: TextStyle(color: Colors.grey[300])),
         ),
       );
       final contrast =
@@ -344,8 +347,8 @@ void main() {
         minimumSeverity: AccessibilityIssueSeverity.high,
       );
       expect(
-        severe.issues
-            .every((i) => i.severity.isAtLeast(AccessibilityIssueSeverity.high)),
+        severe.issues.every(
+            (i) => i.severity.isAtLeast(AccessibilityIssueSeverity.high)),
         isTrue,
       );
       expect(severe.totalIssues, lessThan(all.totalIssues));
@@ -443,8 +446,7 @@ void main() {
       expect(size.height, greaterThanOrEqualTo(48.0));
     });
 
-    testWidgets('has proper semantics and passes the scanner',
-        (tester) async {
+    testWidgets('has proper semantics and passes the scanner', (tester) async {
       final report = await _scan(
         tester,
         AccessibilityFixerButton(
@@ -509,8 +511,8 @@ void main() {
       expect(report.issuesBySeverity[AccessibilityIssueSeverity.critical],
           hasLength(1));
       expect(report.issuesByType.keys, hasLength(3));
-      expect(report.issuesAtLeast(AccessibilityIssueSeverity.high),
-          hasLength(2));
+      expect(
+          report.issuesAtLeast(AccessibilityIssueSeverity.high), hasLength(2));
     });
 
     test('generates readable summary', () {
