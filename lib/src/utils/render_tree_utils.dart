@@ -73,13 +73,6 @@ class RenderTreeUtils {
   /// its own content, a `Semantics`/`Tooltip` ancestor, or the subtree of an
   /// enclosing `MergeSemantics` (as used by `CheckboxListTile` and friends).
   static bool hasAccessibleName(RenderObject handler) {
-    final node = handler.debugSemantics;
-    if (node != null) {
-      final data = node.getSemanticsData();
-      if (data.label.trim().isNotEmpty || data.tooltip.trim().isNotEmpty) {
-        return true;
-      }
-    }
     if (anyInSemanticsSubtree(handler, providesName)) return true;
     for (final ancestor in ancestors(handler, maxDepth: 30)) {
       if (ancestor is RenderSemanticsAnnotations &&

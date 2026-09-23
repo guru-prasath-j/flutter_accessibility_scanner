@@ -28,7 +28,8 @@ class AccessibilityFixerButton extends StatelessWidget {
   /// Called when the button is activated. The button is disabled when null.
   final VoidCallback? onPressed;
 
-  /// What screen readers announce for the button.
+  /// What screen readers announce for the button. When set, it replaces the
+  /// semantics of [child].
   final String? semanticsLabel;
 
   /// Extra screen reader guidance about what activating the button does.
@@ -74,7 +75,15 @@ class AccessibilityFixerButton extends StatelessWidget {
             borderRadius: borderRadius,
             child: Padding(
               padding: padding ?? const EdgeInsets.all(8.0),
-              child: Center(widthFactor: 1, heightFactor: 1, child: child),
+              child: Center(
+                widthFactor: 1,
+                heightFactor: 1,
+                // An explicit label replaces the visible content for screen
+                // readers instead of being read together with it.
+                child: semanticsLabel != null
+                    ? ExcludeSemantics(child: child)
+                    : child,
+              ),
             ),
           ),
         ),
