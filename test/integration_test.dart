@@ -3,146 +3,158 @@ import 'package:flutter_accessibility_scanner/flutter_accessibility_scanner.dart
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('Integration Tests', () {
-    testWidgets('Complete accessibility scan workflow',
-        (WidgetTester tester) async {
-      // Create a test app with known accessibility issues
-      await tester.pumpWidget(TestAppWithIssues());
+  group('Integration', () {
+    testWidgets('complete accessibility scan workflow', (tester) async {
+      await tester.pumpWidget(const TestAppWithIssues());
       await tester.pumpAndSettle();
 
-      // Perform the scan
-      final scanner = AccessibilityScanner();
-      final report =
-          await scanner.scan(tester.element(find.byType(MaterialApp)));
+      final report = await AccessibilityScanner()
+          .scan(tester.element(find.byType(MaterialApp)));
 
-      // Verify we found the expected issues
-      for (final issue in report.issues) {
-        // Process issues silently in tests
-      }
-
-      // Now that the scanner is working, we should find issues
-      expect(report.totalIssues, greaterThan(0),
-          reason: 'Should detect accessibility issues in test app');
-
-      // Should detect missing semantics
+      expect(report.totalIssues, greaterThan(0));
       expect(
-          report.issues
-              .where(
-                  (i) => i.type == AccessibilityIssueType.missingSemanticsLabel)
-              .length,
-          greaterThan(0),
-          reason: 'Should detect missing semantics labels');
-
-      // Should detect small tap targets
+        report.issuesOfType(AccessibilityIssueType.missingSemanticsLabel),
+        isNotEmpty,
+        reason: 'Should detect missing semantics labels',
+      );
       expect(
-          report.issues
-              .where((i) => i.type == AccessibilityIssueType.smallTapTarget)
-              .length,
-          greaterThan(0),
-          reason: 'Should detect small tap targets');
-
-      // Should detect color contrast issues
+        report.issuesOfType(AccessibilityIssueType.smallTapTarget),
+        isNotEmpty,
+        reason: 'Should detect small tap targets',
+      );
       expect(
-          report.issues
-              .where((i) => i.type == AccessibilityIssueType.poorColorContrast)
-              .length,
-          greaterThan(0),
-          reason: 'Should detect color contrast issues');
+        report.issuesOfType(AccessibilityIssueType.poorColorContrast),
+        isNotEmpty,
+        reason: 'Should detect color contrast issues',
+      );
+
+      // The accessible button must not be reported.
+      final goodButton = tester.getRect(find.byType(AccessibilityFixerButton));
+      expect(
+        report.issues.where(
+          (i) => i.bounds != null && goodButton.contains(i.bounds!.center),
+        ),
+        isEmpty,
+      );
     });
 
-    testWidgets('AccessibilityFixerButton works correctly',
-        (WidgetTester tester) async {
-      bool buttonPressed = false;
-
+    testWidgets('AccessibilityFixerButton works', (tester) async {
+      var pressed = false;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: AccessibilityFixerButton(
-              onPressed: () => buttonPressed = true,
+              onPressed: () => pressed = true,
               semanticsLabel: 'Test Button',
-              child: Text('Click Me'),
+              child: const Text('Click Me'),
             ),
           ),
         ),
       );
 
-      // Verify button is rendered with correct size
-      final buttonFinder = find.byType(AccessibilityFixerButton);
-      expect(buttonFinder, findsOneWidget);
-
-      final size = tester.getSize(buttonFinder);
+      final size = tester.getSize(find.byType(AccessibilityFixerButton));
       expect(size.width, greaterThanOrEqualTo(48.0));
       expect(size.height, greaterThanOrEqualTo(48.0));
-
-      // Verify semantics
       expect(find.bySemanticsLabel('Test Button'), findsOneWidget);
 
-      // Test tap functionality
-      await tester.tap(buttonFinder);
-      expect(buttonPressed, isTrue);
+      await tester.tap(find.byType(AccessibilityFixerButton));
+      expect(pressed, isTrue);
     });
 
-    testWidgets('Real-time scanner widget displays correctly',
-        (WidgetTester tester) async {
+    testWidgets('scanner overlay scans, reports and highlights',
+        (tester) async {
+      AccessibilityReport? received;
       await tester.pumpWidget(
         MaterialApp(
           home: AccessibilityScannerWidget(
             enabled: true,
+            onReport: (report) => received = report,
             child: Scaffold(
-              body: Container(
-                child: Text('Test App'),
+              body: Center(
+                child: GestureDetector(
+                  onTap: () {},
+                  child: Container(width: 20, height: 20, color: Colors.blue),
+                ),
               ),
             ),
           ),
         ),
       );
-
       await tester.pumpAndSettle();
 
-      // Should render the scanner button
       expect(find.byIcon(Icons.accessibility), findsOneWidget);
-
-      // Tap the scanner button
       await tester.tap(find.byIcon(Icons.accessibility));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
-      // Wait a bit for the scan to process
-      await tester.pump(Duration(milliseconds: 100));
+      expect(received, isNotNull);
+      expect(received!.hasIssues, isTrue);
+      expect(find.text('Accessibility Report'), findsOneWidget);
+      // The scanner never reports its own floating button.
+      final fab = tester.getRect(find.byType(FloatingActionButton));
+      expect(
+        received!.issues.where(
+          (i) => i.bounds != null && fab.overlaps(i.bounds!),
+        ),
+        isEmpty,
+      );
 
-      // The loading indicator might appear briefly, so let's check more flexibly
-      final loadingFinder = find.byType(CircularProgressIndicator);
-      if (loadingFinder.evaluate().isEmpty) {
-        // Scan completed quickly - this is expected
-      } else {
-        expect(loadingFinder, findsOneWidget);
-      }
+      await tester.pump(const Duration(seconds: 6));
+      expect(find.text('Accessibility Report'), findsNothing);
+    });
 
-      // Wait for any pending timers to complete
-      await tester.pumpAndSettle(Duration(seconds: 6));
+    testWidgets('scanner overlay can wrap MaterialApp', (tester) async {
+      await tester.pumpWidget(
+        const AccessibilityScannerWidget(
+          enabled: true,
+          child: MaterialApp(home: Scaffold(body: Text('Hello'))),
+        ),
+      );
+      await tester.tap(find.byIcon(Icons.accessibility));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('Accessibility Report'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('disabled overlay renders only the child', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: AccessibilityScannerWidget(
+            enabled: false,
+            child: Scaffold(body: Text('Hello')),
+          ),
+        ),
+      );
+      expect(find.byIcon(Icons.accessibility), findsNothing);
+      expect(find.text('Hello'), findsOneWidget);
     });
   });
 }
 
+/// A small app with known accessibility problems.
 class TestAppWithIssues extends StatelessWidget {
+  /// Creates the app.
+  const TestAppWithIssues({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(title: Text('Test App')),
+        appBar: AppBar(title: const Text('Test App')),
         body: Column(
           children: [
-            // Issue 1: Small tap target without semantics
+            // Small tap target without a label.
             GestureDetector(
               onTap: () {},
               child: Container(
                 width: 20,
                 height: 20,
                 color: Colors.blue,
-                child: Icon(Icons.star, size: 12),
+                child: const Icon(Icons.star, size: 12),
               ),
             ),
-
-            // Issue 2: Poor contrast text
+            // Poor contrast text.
             Container(
               color: Colors.grey[200],
               child: Text(
@@ -150,23 +162,23 @@ class TestAppWithIssues extends StatelessWidget {
                 style: TextStyle(color: Colors.grey[300]),
               ),
             ),
-
-            // Issue 3: Interactive element without semantics
+            // Interactive element that is too short.
             InkWell(
               onTap: () {},
               child: Container(
                 width: 100,
                 height: 40,
-                color: Colors.red,
-                child: Center(child: Text('Button')),
+                color: Colors.red.shade900,
+                child: const Center(
+                  child: Text('Button', style: TextStyle(color: Colors.white)),
+                ),
               ),
             ),
-
-            // Good example for comparison
+            // Good example for comparison.
             AccessibilityFixerButton(
               onPressed: () {},
               semanticsLabel: 'Good button',
-              child: Text('Accessible Button'),
+              child: const Text('Accessible Button'),
             ),
           ],
         ),

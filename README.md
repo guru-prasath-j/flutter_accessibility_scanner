@@ -1,440 +1,169 @@
-## Flutter Accessibility Scanner
+# Flutter Accessibility Scanner
 
-A comprehensive Flutter package that automatically scans Flutter apps for accessibility issues and provides suggestions or automated fixes to improve app accessibility compliance with WCAG 2.1 guidelines.
+[![pub package](https://img.shields.io/pub/v/flutter_accessibility_scanner.svg)](https://pub.dev/packages/flutter_accessibility_scanner)
+[![pub points](https://img.shields.io/pub/points/flutter_accessibility_scanner)](https://pub.dev/packages/flutter_accessibility_scanner/score)
+[![CI](https://github.com/guru-prasath-j/flutter_accessibility_scanner/actions/workflows/ci.yml/badge.svg)](https://github.com/guru-prasath-j/flutter_accessibility_scanner/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## What is Accessibility?
+Find accessibility problems in your Flutter UI before your users do. The
+scanner walks the live render tree and reports issues against **WCAG 2.1**,
+each with a severity, the WCAG success criterion, the on-screen location and
+a concrete fix.
 
-Accessibility ensures that your Flutter app can be used by everyone, including people with disabilities who rely on screen readers, voice control, or other assistive technologies. This package helps you identify and fix common accessibility problems automatically.
+| Check | WCAG | Example finding |
+|---|---|---|
+| Missing accessible name | 4.1.2 | `GestureDetector` wrapping an unlabeled icon |
+| Image without description | 1.1.1 | `Image` with no `semanticLabel` |
+| Low text contrast | 1.4.3 | grey text on white, 2.1:1 (needs 4.5:1) |
+| Low icon contrast | 1.4.11 | light icon on light surface, below 3:1 |
+| Small tap target | 2.5.5 | 30x30 button (recommended 48x48) |
+| No keyboard focus | 2.1.1 | tappable `GestureDetector` that can't be focused |
 
-## Features
+Use it three ways: an **in-app overlay** while you develop, a **one-line
+check in widget tests**, or a **JSON report** for CI and audits.
 
-- 🔍 **Automatic Widget Tree Scanning**: Scans your Flutter widget tree to detect accessibility issues
-- 📊 **WCAG 2.1 Compliance**: Checks against Web Content Accessibility Guidelines 2.1 AA standards
-- 🎯 **Multiple Issue Detection**:
-  - Missing semantic labels and descriptions
-  - Poor color contrast ratios (below WCAG standards)
-  - Tap targets smaller than 48x48 logical pixels
-  - Missing keyboard focus support
-- 🛠️ **Automated Fix Suggestions**: Provides actionable suggestions for each detected issue
-- 🧩 **Helper Widgets**: Pre-built widgets that automatically apply accessibility best practices
-- 📋 **JSON Reports**: Generate detailed accessibility reports in JSON format
-- 🐛 **Development Tools**: Real-time scanning during development with visual feedback
-
-## Getting Started
-
-### Installation
-
-Add this package to your `pubspec.yaml`:
+## Install
 
 ```yaml
-dependencies:
-  flutter_accessibility_scanner: ^1.0.0
-
 dev_dependencies:
-  flutter_accessibility_scanner: ^1.0.0
+  flutter_accessibility_scanner: ^1.1.0
 ```
 
-Then run:
-
-```bash
-flutter pub get
-```
-
-### Import the Package
+Add it under `dependencies` instead if you ship the overlay in debug builds of
+your app (it is disabled in release mode by default).
 
 ```dart
 import 'package:flutter_accessibility_scanner/flutter_accessibility_scanner.dart';
 ```
 
-## Basic Usage
-
-### 1. Simple One-Time Scan
-
-The easiest way to check your app for accessibility issues:
+## 1. In-app overlay
 
 ```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_accessibility_scanner/flutter_accessibility_scanner.dart';
-
-class MyApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(title: Text('My App')),
-        body: Column(
-          children: [
-            // Your app content here
-            ElevatedButton(
-              onPressed: () async {
-                // Scan for accessibility issues
-                final scanner = AccessibilityScanner();
-                final report = await scanner.scan(context);
-                
-                //print('Found ${report.totalIssues} accessibility issues');
-                
-                // Show issues
-                for (final issue in report.issues) {
-                  //print('${issue.type}: ${issue.description}');
-                  //print('Suggestion: ${issue.suggestion}');
-                }
-              },
-              child: Text('Check Accessibility'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-```
-
-### 2. Real-Time Development Scanning
-
-For continuous feedback while developing, wrap your app with `AccessibilityScannerWidget`:
-
-```dart
-class MyApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return AccessibilityScannerWidget(
-      enabled: true, // Only enabled in debug mode by default
-      child: MaterialApp(
-        home: MyHomePage(),
-      ),
-    );
-  }
-}
-```
-
-This adds a floating accessibility button that you can tap to scan your current screen and see results in an overlay.
-
-### 3. Using Helper Widgets
-
-Instead of fixing issues manually, use the provided helper widgets:
-
-```dart
-// ❌ Problematic button (too small, no semantics)
-GestureDetector(
-  onTap: () => doSomething(),
-  child: Container(
-    width: 30, // Too small!
-    height: 30, // Too small!
-    child: Icon(Icons.star),
+MaterialApp(
+  builder: (context, child) => AccessibilityScannerWidget(
+    onReport: (report) => debugPrint(report.summary),
+    child: child!,
   ),
-)
-
-// ✅ Accessible button using helper widget
-AccessibilityFixerButton(
-  onPressed: () => doSomething(),
-  semanticsLabel: 'Add to favorites',
-  semanticsHint: 'Double tap to add this item to your favorites',
-  child: Icon(Icons.star),
-)
-```
-
-## What Issues Does It Detect?
-
-### 1. Missing Semantic Labels
-**Problem**: Interactive elements without labels that screen readers can't understand.
-
-```dart
-// ❌ Bad: No label for screen reader
-GestureDetector(
-  onTap: () => save(),
-  child: Icon(Icons.save),
-)
-
-// ✅ Good: Has semantic label
-Semantics(
-  label: 'Save document',
-  child: GestureDetector(
-    onTap: () => save(),
-    child: Icon(Icons.save),
-  ),
-)
-```
-
-### 2. Poor Color Contrast
-**Problem**: Text that's hard to read due to insufficient contrast with background.
-
-```dart
-// ❌ Bad: Poor contrast (will be detected)
-Text(
-  'Hard to read',
-  style: TextStyle(color: Colors.grey[400]), // On white background
-)
-
-// ✅ Good: High contrast
-Text(
-  'Easy to read',
-  style: TextStyle(color: Colors.black), // On white background
-)
-```
-
-### 3. Small Tap Targets
-**Problem**: Buttons or interactive areas smaller than 48x48 pixels are hard to tap.
-
-```dart
-// ❌ Bad: Too small to tap easily
-Container(
-  width: 20, // Too small!
-  height: 20, // Too small!
-  child: GestureDetector(
-    onTap: () => action(),
-    child: Icon(Icons.close, size: 16),
-  ),
-)
-
-// ✅ Good: Proper tap target size
-Container(
-  width: 48, // Minimum recommended size
-  height: 48,
-  child: GestureDetector(
-    onTap: () => action(),
-    child: Icon(Icons.close),
-  ),
-)
-```
-
-### 4. Missing Focus Support
-**Problem**: Interactive elements that can't be navigated with keyboard or assistive devices.
-
-## Understanding the Report
-
-When you run a scan, you get an `AccessibilityReport` object:
-
-```dart
-final report = await scanner.scan(context);
-
-// Basic information
-//print('Total issues: ${report.totalIssues}');
-//print('Scan time: ${report.timestamp}');
-
-// Issues by severity
-final critical = report.issuesBySeverity[AccessibilityIssueSeverity.critical];
-//print('Critical issues: ${critical.length ?? 0}');
-
-// Detailed JSON report
-String jsonReport = report.toJson();
-//print(jsonReport); // Save this for detailed analysis
-
-// Human-readable summary
-//print(report.summary);
-```
-
-### Issue Severity Levels
-
-- **Critical**: Major barriers (contrast ratio < 3.0, very small tap targets)
-- **High**: Significant issues (missing labels, poor contrast)
-- **Medium**: Important improvements (missing focus support)
-- **Low**: Minor issues (slightly small tap targets)
-
-## Advanced Usage
-
-### Custom Color Contrast Checking
-
-```dart
-import 'package:flutter_accessibility_scanner/flutter_accessibility_scanner.dart';
-
-// Check specific colors
-double contrastRatio = ColorContrastUtils.calculateContrastRatio(
-  Colors.black,   // Text color
-  Colors.white,   // Background color
-);
-
-//print('Contrast ratio: $contrastRatio'); // Should be >= 4.5 for WCAG AA
-
-// Check if colors meet standards
-bool meetsWCAGAA = ColorContrastUtils.meetsWCAGAA(contrastRatio);
-//print('Meets WCAG AA: $meetsWCAGAA');
-
-// Get suggested better color
-Color betterColor = ColorContrastUtils.suggestBetterColor(
-  Colors.grey[400]!, // Current poor color
-  Colors.white,      // Background
+  home: const HomePage(),
 );
 ```
 
-### Widget Testing Integration
+A floating accessibility button appears in debug builds. Tap it to scan the
+current screen: every issue is outlined in its severity color and listed with
+its WCAG criterion.
 
-Use in your widget tests to ensure accessibility:
+## 2. In widget tests
 
 ```dart
-testWidgets('App should be accessible', (WidgetTester tester) async {
-  await tester.pumpWidget(MyApp());
-  
-  final scanner = AccessibilityScanner();
-  final report = await scanner.scan(tester.element(find.byType(MyApp)));
-  
-  // Ensure no critical accessibility issues
-  final criticalIssues = report.issuesBySeverity[AccessibilityIssueSeverity.critical];
-  expect(criticalIssues.length ?? 0, equals(0), 
-    reason: 'App should have no critical accessibility issues');
+testWidgets('checkout screen is accessible', (tester) async {
+  await tester.pumpWidget(const MaterialApp(home: CheckoutScreen()));
+  await tester.pumpAndSettle();
+
+  final report = await AccessibilityScanner().scan(
+    tester.element(find.byType(CheckoutScreen)),
+    minimumSeverity: AccessibilityIssueSeverity.high,
+  );
+
+  expect(report.issues, isEmpty, reason: report.issues.join('\n'));
 });
 ```
 
-## How It Works Under the Hood
+## 3. Reports
 
-### Architecture Overview
-
-The package is built with a modular architecture:
-
-```
-AccessibilityScanner
-├── SemanticsDetector      → Finds missing labels
-├── ContrastDetector       → Checks color contrast
-├── TapTargetDetector      → Measures tap target sizes
-└── FocusDetector          → Verifies focus support
-```
-
-### The Scanning Process
-
-1. **Widget Tree Traversal**: The scanner walks through your Flutter widget tree recursively
-2. **Render Object Analysis**: Each detector examines Flutter's render objects (the actual visual elements)
-3. **Issue Detection**: Detectors apply WCAG rules to identify problems
-4. **Report Generation**: All issues are collected into a comprehensive report
-
-### Key Technical Components
-
-#### 1. Render Object Detection
 ```dart
-// The scanner examines Flutter's render objects
-RenderObject renderObject = context.findRenderObject();
+final report = await AccessibilityScanner().scan(context);
 
-// Each detector looks for specific patterns
-bool isInteractive = renderObject is RenderPointerListener ||
-                    renderObject.runtimeType.toString().contains('button');
-```
+report.totalIssues;                                   // 7
+report.issuesAtLeast(AccessibilityIssueSeverity.high); // most urgent
+report.issuesOfType(AccessibilityIssueType.poorColorContrast);
+report.summary;                                       // human-readable
+report.toJson();                                      // for CI artifacts
 
-#### 2. WCAG Color Contrast Calculation
-```dart
-// Implements the official WCAG formula
-double relativeLuminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-double contrastRatio = (lighterLuminance + 0.05) / (darkerLuminance + 0.05);
-```
-
-#### 3. Semantic Analysis
-```dart
-// Checks Flutter's semantic tree
-SemanticsNode? semantics = renderObject.debugSemantics;
-bool hasLabel = semantics.label.isNotEmpty == true;
-```
-
-## WCAG Guidelines Covered
-
-This package helps you comply with these WCAG 2.1 Level AA guidelines:
-
-- **1.1.1 Non-text Content**: Detects images and interactive elements missing alternative text
-- **1.4.3 Contrast (Minimum)**: Ensures text has sufficient color contrast (4.5:1 ratio)
-- **1.4.11 Non-text Contrast**: Checks contrast for UI components and graphics
-- **2.1.1 Keyboard**: Identifies interactive elements lacking keyboard support
-- **2.5.5 Target Size**: Ensures interactive elements meet minimum size requirements (48x48px)
-
-## Best Practices
-
-### 1. Run Scans Regularly
-```dart
-// Add to your development workflow
-void main() {
-  runApp(
-    AccessibilityScannerWidget(
-      enabled: kDebugMode, // Only in development
-      child: MyApp(),
-    ),
-  );
+for (final issue in report.issues) {                  // most severe first
+  print('${issue.severity.name}: ${issue.description}');
+  print('  WCAG ${issue.wcagCriterion} at ${issue.bounds}');
+  print('  Fix: ${issue.suggestion}');
 }
 ```
 
-### 2. Use Helper Widgets
-```dart
-// Instead of manual fixes, use provided widgets
-AccessibilityFixerButton(
-  semanticsLabel: 'Delete item',
-  onPressed: () => delete(),
-  child: Icon(Icons.delete),
-)
+## Configure
 
-AccessibilityFixerText(
-  'Important message',
-  style: TextStyle(fontSize: 16), // Automatically ensures good contrast
-)
+```dart
+final scanner = AccessibilityScanner(detectors: [
+  const SemanticsDetector(),
+  const ImageLabelDetector(),
+  const ContrastDetector(fallbackBackground: Color(0xFF121212)), // dark apps
+  const TapTargetDetector(minimumSize: 44),                      // iOS HIG
+  const FocusDetector(),
+  MyTeamRulesDetector(),
+]);
 ```
 
-### 3. Test with Real Users
-While this package catches many issues automatically, always test with real screen readers and assistive technologies.
+Write your own rule by extending `AccessibilityDetector`:
 
-## Example JSON Report
-
-```json
-{
-  "timestamp": "2023-12-07T10:30:00.000Z",
-  "totalIssues": 3,
-  "issuesBySeverity": {
-    "critical": 1,
-    "high": 1,
-    "medium": 1,
-    "low": 0
-  },
-  "issues": [
-    {
-      "type": "AccessibilityIssueType.poorColorContrast",
-      "description": "Text color contrast ratio 2.1 does not meet WCAG AA standards",
-      "severity": "AccessibilityIssueSeverity.critical",
-      "suggestion": "Use a color with better contrast. Suggested: #000000",
-      "metadata": {
-        "contrastRatio": 2.1,
-        "foregroundColor": "#666666",
-        "backgroundColor": "#cccccc",
-        "requiredRatio": 4.5
-      },
-      "bounds": {
-        "left": 16.0,
-        "top": 100.0,
-        "right": 200.0,
-        "bottom": 120.0
-      }
+```dart
+class MyTeamRulesDetector extends AccessibilityDetector {
+  @override
+  Future<List<AccessibilityIssue>> detect(RenderObject node) async {
+    if (node is RenderParagraph && node.text.toPlainText().contains('TODO')) {
+      return [
+        const AccessibilityIssue(
+          type: AccessibilityIssueType.missingScreenReaderHint,
+          description: 'Placeholder text shipped',
+          severity: AccessibilityIssueSeverity.low,
+        ),
+      ];
     }
-  ]
+    return const [];
+  }
 }
 ```
+
+## Fixer widgets
+
+```dart
+// 48x48 minimum, button semantics, label, hint, keyboard focus, tooltip.
+AccessibilityFixerButton(
+  onPressed: addToFavorites,
+  semanticsLabel: 'Add to favorites',
+  tooltip: 'Add to favorites',
+  child: const Icon(Icons.star),
+);
+
+// Darkens/lightens the color just enough to meet WCAG AA on the background.
+AccessibilityFixerText(
+  text: 'Fine print',
+  style: TextStyle(color: Colors.grey[400]),
+  backgroundColor: Colors.white,
+);
+```
+
+`ColorContrastUtils` exposes the math: `calculateContrastRatio`,
+`relativeLuminance`, `meetsWCAGAA`, `meetsWCAGAAA`, `wcagLevel`,
+`suggestBetterColor`, `composite` and `toHex`.
+
+## How detection works
+
+* **Interactive elements** are the gesture handlers Flutter creates for
+  `GestureDetector`, `InkWell` and all Material buttons with an `onTap` or
+  `onLongPress`.
+* **Names** come from visible text, `Semantics(label:)`, `Tooltip`,
+  `Icon.semanticLabel`, or a surrounding `MergeSemantics`.
+* **Backgrounds** are read from the nearest painted ancestor (`Container`,
+  `ColoredBox`, `DecoratedBox`, `Material`, `Card`, `Scaffold`), blending
+  translucent layers. Text over images or gradients can't be measured; those
+  fall back to `fallbackBackground` and are marked `backgroundAssumed`.
+* **Offstage** content is skipped, like a screen reader would.
+
+An automated scan catches a large share of common problems but not all of
+them. Also test with TalkBack/VoiceOver, keyboard navigation and large font
+sizes.
 
 ## Contributing
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-## Testing
-
-Run the package tests:
-
-```bash
-flutter test
-```
-
-The package includes comprehensive tests for:
-- Scanner functionality
-- Color contrast calculations  
-- Helper widgets
-- Report generation
+Issues and pull requests are welcome on
+[GitHub](https://github.com/guru-prasath-j/flutter_accessibility_scanner).
 
 ## License
 
-This project is licensed under the MIT License.
-
-## Acknowledgments
-
-- WCAG 2.1 Guidelines for accessibility standards
-- Flutter team for the excellent accessibility framework
-- Community feedback and contributions
-
----
-
-**Remember**: This package helps identify and fix common accessibility issues, but manual testing with actual assistive technologies is still recommended for comprehensive accessibility validation.
-
-**Need Help?** Check out Flutter's [accessibility documentation](https://docs.flutter.dev/development/accessibility-and-localization/accessibility) for more information about building accessible Flutter apps.
+MIT

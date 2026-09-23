@@ -1,70 +1,71 @@
 import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
 
 import '../accessibility_scanner.dart';
 import '../models/accessibility_issue.dart';
+import '../utils/render_tree_utils.dart';
 
-/// Detects interactive elements that lack proper focus support.
+/// Detects interactive elements that keyboard and switch users cannot reach.
+///
+/// `InkWell`, Material buttons and other focus-aware widgets pass. A bare
+/// `GestureDetector` is reported, because it never takes keyboard focus.
 class FocusDetector extends AccessibilityDetector {
+  /// Creates the detector.
+  const FocusDetector();
+
   @override
   Future<List<AccessibilityIssue>> detect(RenderObject renderObject) async {
-    final List<AccessibilityIssue> issues = [];
-
-    if (_isInteractiveElement(renderObject) &&
-        !_hasFocusSupport(renderObject)) {
-      issues.add(AccessibilityIssue(
-        type: AccessibilityIssueType.missingFocusSupport,
-        description: 'Interactive element lacks keyboard focus support',
-        severity: AccessibilityIssueSeverity.medium,
-        suggestion:
-            'Wrap the widget with Focus or ensure it properly handles keyboard navigation',
-        bounds: renderObject.paintBounds,
-        metadata: {
-          'widgetType': renderObject.runtimeType.toString(),
-          'canRequestFocus': _canRequestFocus(renderObject),
-        },
-      ));
+    if (!RenderTreeUtils.isTapHandler(renderObject) ||
+        _hasFocusSupport(renderObject)) {
+      return const [];
     }
 
-    return issues;
+    return [
+      AccessibilityIssue(
+        type: AccessibilityIssueType.missingFocusSupport,
+        description: 'Interactive element cannot receive keyboard focus',
+        severity: AccessibilityIssueSeverity.medium,
+        suggestion: 'Use InkWell or a Material button instead of '
+            'GestureDetector, or wrap it in FocusableActionDetector',
+        bounds: RenderTreeUtils.globalBounds(renderObject),
+        wcagCriterion: '2.1.1 Keyboard',
+        metadata: {'widgetType': renderObject.runtimeType.toString()},
+      ),
+    ];
   }
 
-  bool _isInteractiveElement(RenderObject renderObject) {
-    // More comprehensive detection of interactive elements
-    final String typeName = renderObject.runtimeType.toString().toLowerCase();
+  bool _hasFocusSupport(RenderObject handler) {
+    // Focus widgets expose themselves to semantics as "focusable".
+    for (final ancestor in RenderTreeUtils.ancestors(handler, maxDepth: 12)) {
+      if (ancestor is RenderSemanticsAnnotations &&
+          ancestor.properties.focusable == true) {
+        return true;
+      }
+    }
+    if (RenderTreeUtils.anyInSemanticsSubtree(
+      handler,
+      (node) =>
+          node is RenderEditable ||
+          (node is RenderSemanticsAnnotations &&
+              node.properties.focusable == true),
+      maxDepth: 8,
+    )) {
+      return true;
+    }
 
-    return renderObject is RenderPointerListener ||
-        typeName.contains('button') ||
-        typeName.contains('gesture') ||
-        typeName.contains('inkwell') ||
-        typeName.contains('tap') ||
-        typeName.contains('pointer') ||
-        _hasClickableSemantics(renderObject);
-  }
-
-  bool _hasClickableSemantics(RenderObject renderObject) {
-    final semantics = renderObject.debugSemantics;
-    if (semantics == null) return false;
-
-    // Check if has tap action or is marked as button
-    return semantics.hasFlag(SemanticsFlag.isButton) ||
-        semantics.hasFlag(SemanticsFlag.isLink);
-  }
-
-  bool _hasFocusSupport(RenderObject renderObject) {
-    // Check if the render object or its semantic node supports focus
-    final semantics = renderObject.debugSemantics;
-
-    // If no semantics at all, consider it lacking focus support
-    if (semantics == null) return false;
-
-    return semantics.hasFlag(SemanticsFlag.isFocusable) ||
-        semantics.hasFlag(SemanticsFlag.isFocused) ||
-        _canRequestFocus(renderObject);
-  }
-
-  bool _canRequestFocus(RenderObject renderObject) {
-    // This is a simplified check - in a real implementation, you'd want to
-    // traverse up the widget tree to find Focus widgets
-    return renderObject.runtimeType.toString().toLowerCase().contains('focus');
+    // In debug builds we can also look for a Focus widget directly.
+    final element = RenderTreeUtils.creatorElement(handler);
+    if (element == null) return false;
+    var found = false;
+    var steps = 0;
+    element.visitAncestorElements((ancestor) {
+      final widget = ancestor.widget;
+      if (widget is Focus && widget is! FocusScope) {
+        found = widget.canRequestFocus != false;
+        return false;
+      }
+      return ++steps < 30;
+    });
+    return found;
   }
 }

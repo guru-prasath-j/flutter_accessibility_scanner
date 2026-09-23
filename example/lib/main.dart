@@ -2,165 +2,127 @@ import 'package:flutter/material.dart';
 import 'package:flutter_accessibility_scanner/flutter_accessibility_scanner.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
+/// Demo app. The floating accessibility button (debug builds) scans the
+/// current screen and outlines every issue it finds.
 class MyApp extends StatelessWidget {
+  /// Creates the demo app.
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
-    return AccessibilityScannerWidget(
-      child: MaterialApp(
-        title: 'Accessibility Scanner Demo',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-        ),
-        home: MyHomePage(),
+    return MaterialApp(
+      title: 'Accessibility Scanner Demo',
+      theme: ThemeData(colorSchemeSeed: Colors.indigo),
+      builder: (context, child) => AccessibilityScannerWidget(
+        onReport: (report) => debugPrint(report.summary),
+        child: child!,
       ),
+      home: const MyHomePage(),
     );
   }
 }
 
+/// A page with deliberately good and bad examples side by side.
 class MyHomePage extends StatefulWidget {
+  /// Creates the page.
+  const MyHomePage({super.key});
+
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  String _scanResults = '';
+  AccessibilityReport? _report;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Accessibility Scanner Demo'),
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Accessibility Issues Examples',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            SizedBox(height: 20),
-
-            // Example 1: Button with accessibility issues
-            Text('❌ Bad: Button with issues'),
-            SizedBox(height: 8),
-            GestureDetector(
+      appBar: AppBar(title: const Text('Accessibility Scanner Demo')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('Bad: tiny, unlabeled button', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: GestureDetector(
               onTap: () => _showSnackBar('Tapped bad button'),
               child: Container(
-                width: 30, // Too small
-                height: 30, // Too small
-                color: Colors.grey[300], // Poor contrast
-                child:
-                    Icon(Icons.star, color: Colors.grey[400]), // Poor contrast
+                width: 30,
+                height: 30,
+                color: Colors.grey[300],
+                child: Icon(Icons.star, color: Colors.grey[400]),
               ),
             ),
-            SizedBox(height: 20),
-
-            // Example 2: Fixed button
-            Text('✅ Good: Accessibility-enhanced button'),
-            SizedBox(height: 8),
-            AccessibilityFixerButton(
+          ),
+          const SizedBox(height: 20),
+          Text('Good: AccessibilityFixerButton',
+              style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AccessibilityFixerButton(
               onPressed: () => _showSnackBar('Tapped good button'),
               semanticsLabel: 'Add to favorites',
               semanticsHint: 'Adds this item to your favorites list',
-              child: Icon(Icons.star, color: Colors.blue),
+              child: const Icon(Icons.star, color: Colors.indigo),
             ),
-            SizedBox(height: 20),
-
-            // Example 3: Text with poor contrast
-            Text('❌ Bad: Poor contrast text'),
-            SizedBox(height: 8),
+          ),
+          const SizedBox(height: 20),
+          Text('Bad: low-contrast text', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Text(
+            'This text has poor contrast and is hard to read',
+            style: TextStyle(color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 20),
+          Text('Good: AccessibilityFixerText', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          AccessibilityFixerText(
+            text: 'This text is darkened just enough to pass WCAG AA',
+            style: TextStyle(color: Colors.grey[400], fontSize: 16),
+            backgroundColor: theme.colorScheme.surface,
+          ),
+          const SizedBox(height: 30),
+          FilledButton.icon(
+            onPressed: _performManualScan,
+            icon: const Icon(Icons.accessibility),
+            label: const Text('Run manual accessibility scan'),
+          ),
+          if (_report != null) ...[
+            const SizedBox(height: 20),
             Text(
-              'This text has poor contrast and is hard to read',
-              style: TextStyle(color: Colors.grey[400]),
+              'Found ${_report!.totalIssues} issues',
+              style: theme.textTheme.titleMedium,
             ),
-            SizedBox(height: 20),
-
-            // Example 4: Fixed text
-            Text('✅ Good: Accessible text'),
-            SizedBox(height: 8),
-            AccessibilityFixerText(
-              text: 'This text has good contrast and is easy to read',
-              style: TextStyle(fontSize: 16),
-            ),
-            SizedBox(height: 30),
-
-            // Manual scan button
-            ElevatedButton.icon(
-              onPressed: _performManualScan,
-              icon: Icon(Icons.accessibility),
-              label: Text('Run Manual Accessibility Scan'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: Size(double.infinity, 48),
-              ),
-            ),
-            SizedBox(height: 20),
-
-            // Scan results
-            if (_scanResults.isNotEmpty) ...[
-              Text(
-                'Scan Results:',
-                style: Theme.of(context).textTheme.titleMedium.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: Text(
-                  _scanResults,
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 12),
+            for (final issue in _report!.issues)
+              ListTile(
+                dense: true,
+                title: Text(issue.description),
+                subtitle: Text(
+                  '${issue.severity.name} · WCAG ${issue.wcagCriterion ?? '-'}'
+                  '\n${issue.suggestion ?? ''}',
                 ),
               ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _performManualScan() async {
-    try {
-      final scanner = AccessibilityScanner();
-      final report = await scanner.scan(context);
-
-      setState(() {
-        _scanResults = '''
-${report.summary}
-
-Detailed Issues:
-${report.issues.map((issue) => '''
-• ${issue.type.toString().split('.').last}
-  ${issue.description}
-  Severity: ${issue.severity.toString().split('.').last}
-  ${issue.suggestion ?? 'No suggestion available'}
-''').join('\n')}
-
-JSON Report:
-${report.toJson()}
-        ''';
-      });
-
-      _showSnackBar(
-          'Accessibility scan completed! Found ${report.totalIssues} issues.');
-    } catch (e) {
-      _showSnackBar('Scan failed: $e');
-    }
+    final report = await AccessibilityScanner().scan(context);
+    if (!mounted) return;
+    setState(() => _report = report);
+    _showSnackBar('Scan complete: ${report.totalIssues} issues found');
   }
 }

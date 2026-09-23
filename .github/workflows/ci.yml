@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Format, analyze, test, score
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter --version
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          (cd example && flutter pub get)
+
+      - name: Auto-format (push only)
+        if: github.event_name == 'push'
+        run: |
+          dart format .
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "style: dart format"
+            git push
+          fi
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        if: always()
+        run: |
+          set +e
+          dart analyze --format=machine . > analysis.txt 2>&1
+          code=$?
+          cat analysis.txt
+          awk -F'|' 'NF>=8 { lvl = ($1=="ERROR") ? "error" : "warning"; printf "::%s file=%s,line=%s,col=%s::%s %s: %s\n", lvl, $4, $5, $6, $1, $3, $8 }' analysis.txt | sed "s#file=$GITHUB_WORKSPACE/#file=#"
+          flutter analyze
+          exit $(( code || $? ))
+
+      - name: Test package
+        if: always()
+        run: flutter test --reporter github
+
+      - name: Test example
+        if: always()
+        working-directory: example
+        run: flutter test --reporter github
+
+      - name: Pub dry run
+        if: always()
+        run: flutter pub publish --dry-run
+
+      - name: pana score
+        if: always()
+        run: |
+          dart pub global activate pana
+          set +e
+          pana --no-warning --json . > pana.json
+          set -e
+          python3 - <<'PY'
+          import json, os
+          d = json.load(open('pana.json'))
+          s = d.get('scores', {})
+          print(f"::notice title=pana::{s.get('grantedPoints')}/{s.get('maxPoints')} points")
+          out = open(os.environ['GITHUB_STEP_SUMMARY'], 'a')
+          out.write(f"## pana: {s.get('grantedPoints')}/{s.get('maxPoints')}\n\n")
+          for sec in d.get('report', {}).get('sections', []):
+              print(f"::notice title={sec['title']}::{sec['grantedPoints']}/{sec['maxPoints']}")
+              out.write(f"### {sec['title']} {sec['grantedPoints']}/{sec['maxPoints']}\n\n{sec.get('summary','')}\n\n")
+              if sec['grantedPoints'] < sec['maxPoints']:
+                  print(f"::warning title=pana {sec['title']}::" + sec.get('summary','').replace('\n', ' ')[:3000])
+          PY

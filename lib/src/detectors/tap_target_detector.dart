@@ -2,93 +2,65 @@ import 'package:flutter/rendering.dart';
 
 import '../accessibility_scanner.dart';
 import '../models/accessibility_issue.dart';
+import '../utils/render_tree_utils.dart';
 
-/// Detects interactive elements with tap targets smaller than recommended size.
+/// Detects interactive elements whose touch area is smaller than recommended.
+///
+/// The default of 48x48 logical pixels follows the Material and Android
+/// guidelines; iOS recommends 44x44 and WCAG 2.2 (2.5.8) requires at least
+/// 24x24. Pass [minimumSize] to match your platform target.
 class TapTargetDetector extends AccessibilityDetector {
-  static const double minimumTapTargetSize = 48.0; // WCAG recommended minimum
+  /// Creates the detector.
+  const TapTargetDetector({this.minimumSize = minimumTapTargetSize});
+
+  /// The default minimum tap target edge, in logical pixels.
+  static const double minimumTapTargetSize = 48.0;
+
+  /// The minimum tap target edge this detector enforces.
+  final double minimumSize;
 
   @override
   Future<List<AccessibilityIssue>> detect(RenderObject renderObject) async {
-    final List<AccessibilityIssue> issues = [];
-
-    if (_isInteractiveElement(renderObject)) {
-      final size = renderObject.paintBounds.size;
-
-      //print(
-      // 'Debug: Checking tap target size for ${renderObject.runtimeType}: ${size.width}x${size.height}');
-
-      if (size.width < minimumTapTargetSize ||
-          size.height < minimumTapTargetSize) {
-        //print('Debug: Found small tap target: ${size.width}x${size.height}');
-        final issue = AccessibilityIssue(
-          type: AccessibilityIssueType.smallTapTarget,
-          description:
-              'Interactive element tap target is smaller than recommended ${minimumTapTargetSize}x${minimumTapTargetSize} pixels',
-          severity: _calculateSeverity(size),
-          suggestion:
-              'Increase the tap target size to at least ${minimumTapTargetSize}x${minimumTapTargetSize} pixels using padding or minimum size constraints',
-          bounds: renderObject.paintBounds,
-          metadata: {
-            'currentWidth': size.width,
-            'currentHeight': size.height,
-            'recommendedWidth': minimumTapTargetSize,
-            'recommendedHeight': minimumTapTargetSize,
-            'widgetType': renderObject.runtimeType.toString(),
-          },
-        );
-        issues.add(issue);
-        //print(
-        // 'Debug: Added tap target issue to list. Total issues: ${issues.length}');
-      }
+    if (!RenderTreeUtils.isTapHandler(renderObject) ||
+        renderObject is! RenderBox ||
+        !renderObject.hasSize) {
+      return const [];
     }
 
-    return issues;
+    final size = RenderTreeUtils.effectiveTapSize(renderObject);
+    if (size.width >= minimumSize && size.height >= minimumSize) {
+      return const [];
+    }
+
+    final min = minimumSize.toStringAsFixed(0);
+    return [
+      AccessibilityIssue(
+        type: AccessibilityIssueType.smallTapTarget,
+        description: 'Tap target is ${size.width.toStringAsFixed(0)}x'
+            '${size.height.toStringAsFixed(0)}, smaller than the recommended '
+            '${min}x$min',
+        severity: _severityFor(size),
+        suggestion: 'Increase the tap target to at least ${min}x$min using '
+            'padding or ConstrainedBox(constraints: BoxConstraints(minWidth: '
+            '$min, minHeight: $min))',
+        bounds: RenderTreeUtils.globalBounds(renderObject),
+        wcagCriterion: '2.5.5 Target Size',
+        metadata: {
+          'currentWidth': size.width,
+          'currentHeight': size.height,
+          'recommendedWidth': minimumSize,
+          'recommendedHeight': minimumSize,
+          'widgetType': renderObject.runtimeType.toString(),
+        },
+      ),
+    ];
   }
 
-  bool _isInteractiveElement(RenderObject renderObject) {
-    final String typeName = renderObject.runtimeType.toString().toLowerCase();
-
-    // Check for common interactive render objects
-    if (renderObject is RenderPointerListener ||
-        typeName.contains('button') ||
-        typeName.contains('gesture') ||
-        typeName.contains('inkwell') ||
-        typeName.contains('ink') ||
-        typeName.contains('tap') ||
-        typeName.contains('pointer')) {
-      return true;
-    }
-
-    // Check semantics for interactive behavior
-    final semantics = renderObject.debugSemantics;
-    final semanticsData = semantics?.getSemanticsData();
-    if ((semanticsData?.hasAction(SemanticsAction.tap) == true) ||
-        semantics?.hasFlag(SemanticsFlag.isButton) == true ||
-        semantics?.hasFlag(SemanticsFlag.isLink) == true) {
-      return true;
-    }
-    // If semantics is null or doesn't have actions, it's not interactive
-    if (semantics == null) {
-      return false;
-    }
-    // Fallback: check if any actions are available (for newer Flutter versions)
-    if (semantics.getSemanticsData().hasAction(SemanticsAction.tap)) {
-      return true;
-    }
-    return false;
-  }
-
-  AccessibilityIssueSeverity _calculateSeverity(Size size) {
-    final minDimension = size.width < size.height ? size.width : size.height;
-
-    if (minDimension < 24.0) {
-      return AccessibilityIssueSeverity.critical;
-    } else if (minDimension < 32.0) {
-      return AccessibilityIssueSeverity.high;
-    } else if (minDimension < 40.0) {
-      return AccessibilityIssueSeverity.medium;
-    } else {
-      return AccessibilityIssueSeverity.low;
-    }
+  AccessibilityIssueSeverity _severityFor(Size size) {
+    final smallest = size.shortestSide;
+    if (smallest < 24.0) return AccessibilityIssueSeverity.critical;
+    if (smallest < 32.0) return AccessibilityIssueSeverity.high;
+    if (smallest < 40.0) return AccessibilityIssueSeverity.medium;
+    return AccessibilityIssueSeverity.low;
   }
 }

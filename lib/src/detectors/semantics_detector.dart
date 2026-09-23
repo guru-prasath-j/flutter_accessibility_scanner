@@ -4,76 +4,65 @@ import 'package:flutter/rendering.dart';
 
 import '../accessibility_scanner.dart';
 import '../models/accessibility_issue.dart';
+import '../utils/render_tree_utils.dart';
 
-/// Detects widgets that are missing semantic labels or descriptions.
+/// Detects interactive widgets that screen readers cannot name.
+///
+/// A tappable element is considered named when it contains visible text, or
+/// when it or an ancestor carries a `Semantics` label, a `Tooltip`, or an
+/// `Icon.semanticLabel`.
 class SemanticsDetector extends AccessibilityDetector {
+  /// Creates the detector. Set [flagLongText] to also report long paragraphs
+  /// (over [longTextThreshold] characters) with a low-severity hint.
+  const SemanticsDetector({
+    this.flagLongText = false,
+    this.longTextThreshold = 200,
+  });
+
+  /// Whether to report long text blocks as [AccessibilityIssueType.missingScreenReaderHint].
+  final bool flagLongText;
+
+  /// Character count above which [flagLongText] reports a paragraph.
+  final int longTextThreshold;
+
   @override
   Future<List<AccessibilityIssue>> detect(RenderObject renderObject) async {
-    final List<AccessibilityIssue> issues = [];
+    final issues = <AccessibilityIssue>[];
 
-    // Check if this is an interactive widget without semantics
-    if (_isInteractiveWidget(renderObject)) {
-      if (!_hasSemantics(renderObject)) {
-        issues.add(AccessibilityIssue(
-          type: AccessibilityIssueType.missingSemanticsLabel,
-          description: 'Interactive widget missing semantic label',
-          severity: AccessibilityIssueSeverity.high,
-          suggestion:
-              'Add a Semantics widget or semanticsLabel property to provide screen reader support',
-          bounds: renderObject.paintBounds,
-          metadata: {
-            'widgetType': renderObject.runtimeType.toString(),
-          },
-        ));
-      }
+    if (RenderTreeUtils.isTapHandler(renderObject) &&
+        !RenderTreeUtils.hasAccessibleName(renderObject)) {
+      issues.add(AccessibilityIssue(
+        type: AccessibilityIssueType.missingSemanticsLabel,
+        description: 'Interactive element has no accessible name',
+        severity: AccessibilityIssueSeverity.high,
+        suggestion: 'Give it visible text, a Tooltip, an Icon.semanticLabel, '
+            'or wrap it in Semantics(label: ..., button: true)',
+        bounds: RenderTreeUtils.globalBounds(renderObject),
+        wcagCriterion: '4.1.2 Name, Role, Value',
+        metadata: {'widgetType': renderObject.runtimeType.toString()},
+      ));
     }
 
-    // Check for text widgets without semantic meaning
-    if (_isTextWidget(renderObject) && !_hasSemantics(renderObject)) {
-      final textContent = _extractTextContent(renderObject);
-      if (textContent != null && textContent.length > 50) {
+    if (flagLongText && renderObject is RenderParagraph) {
+      final text = renderObject.text.toPlainText();
+      if (text.length > longTextThreshold) {
         issues.add(AccessibilityIssue(
           type: AccessibilityIssueType.missingScreenReaderHint,
-          description: 'Long text content without semantic structure',
-          severity: AccessibilityIssueSeverity.medium,
-          suggestion:
-              'Consider adding semantic hints for better screen reader navigation',
-          bounds: renderObject.paintBounds,
+          description: 'Long text block without semantic structure',
+          severity: AccessibilityIssueSeverity.low,
+          suggestion: 'Split it up with headings (Semantics(header: true)) '
+              'so screen reader users can navigate it',
+          bounds: RenderTreeUtils.globalBounds(renderObject),
+          wcagCriterion: '1.3.1 Info and Relationships',
           metadata: {
-            'textLength': textContent.length,
-            'textPreview':
-                textContent.substring(0, math.min(50, textContent.length)),
+            'widgetType': renderObject.runtimeType.toString(),
+            'textLength': text.length,
+            'textPreview': text.substring(0, math.min(50, text.length)),
           },
         ));
       }
     }
 
     return issues;
-  }
-
-  bool _isInteractiveWidget(RenderObject renderObject) {
-    return renderObject is RenderPointerListener ||
-        renderObject.runtimeType.toString().toLowerCase().contains('button') ||
-        renderObject.runtimeType.toString().toLowerCase().contains('gesture');
-  }
-
-  bool _isTextWidget(RenderObject renderObject) {
-    return renderObject is RenderParagraph;
-  }
-
-  bool _hasSemantics(RenderObject renderObject) {
-    // Check if the render object has semantic annotations
-    final SemanticsNode? semantics = renderObject.debugSemantics;
-    return semantics != null &&
-        (semantics.label.isNotEmpty == true ||
-            semantics.hint.isNotEmpty == true ||
-            semantics.value.isNotEmpty == true);
-  }
-
-  String? _extractTextContent(RenderObject renderObject) {
-    if (renderObject is RenderParagraph) {
-      return renderObject.text.toPlainText();
-    }
-    return null;
   }
 }
