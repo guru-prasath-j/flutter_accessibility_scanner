@@ -77,7 +77,9 @@ report.totalIssues;                                   // 7
 report.issuesAtLeast(AccessibilityIssueSeverity.high); // most urgent
 report.issuesOfType(AccessibilityIssueType.poorColorContrast);
 report.summary;                                       // human-readable
-report.toJson();                                      // for CI artifacts
+report.toJson(pretty: true);                          // for CI artifacts
+report.toMarkdown();                                  // PR comment / job summary
+report.passes(failOn: AccessibilityIssueSeverity.high); // CI gate
 
 for (final issue in report.issues) {                  // most severe first
   print('${issue.severity.name}: ${issue.description}');
@@ -85,6 +87,50 @@ for (final issue in report.issues) {                  // most severe first
   print('  Fix: ${issue.suggestion}');
 }
 ```
+
+The JSON (`schemaVersion: 2`) holds per-severity, per-type and per-WCAG
+criterion counts plus every issue, and reads back with
+`AccessibilityReport.fromJson`, so you can diff a run against a saved baseline.
+
+## 4. In CI
+
+`flutter test` exits with a non-zero code when any test fails, so a failing
+accessibility expectation fails the CI job. Gate on severity and keep the
+report as an artifact:
+
+```dart
+testWidgets('home screen has no high or critical issues', (tester) async {
+  await tester.pumpWidget(const MyApp());
+  await tester.pumpAndSettle();
+
+  final report = await AccessibilityScanner().scan(
+    tester.element(find.byType(HomeScreen)),
+  );
+
+  File('build/a11y-report.json').writeAsStringSync(report.toJson(pretty: true));
+  File('build/a11y-report.md').writeAsStringSync(report.toMarkdown());
+
+  expect(report.passes(failOn: AccessibilityIssueSeverity.high), isTrue,
+      reason: report.summary);
+});
+```
+
+```yaml
+# .github/workflows/a11y.yml (excerpt)
+- run: flutter test test/a11y_test.dart   # exit code 1 => job fails
+- if: always()
+  run: cat build/a11y-report.md >> "$GITHUB_STEP_SUMMARY"
+- if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: a11y-report
+    path: build/a11y-report.*
+```
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | All tests passed: no issue at or above the `failOn` severity. |
+| `1` | At least one test failed, e.g. `passes()` returned `false`. |
 
 ## Configure
 

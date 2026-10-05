@@ -1,3 +1,18 @@
+## 1.2.0
+
+Reports for CI. Backward compatible with 1.1.
+
+* `AccessibilityReport.passes(failOn:)`: one-line severity gate for tests
+  and CI (a failing expectation makes `flutter test` exit non-zero).
+* Richer JSON: `schemaVersion`, `issuesByType` and `issuesByWcagCriterion`
+  counts; each issue also carries short `rule` and `level` names.
+  `toJson(pretty: true)` writes indented, diff-friendly output.
+* `AccessibilityReport.fromJson` / `fromMap` and `AccessibilityIssue.fromJson`
+  read reports back, e.g. to compare against a saved baseline.
+* `AccessibilityReport.toMarkdown()` for pull request comments and
+  `$GITHUB_STEP_SUMMARY`; `issueCountsByWcagCriterion`.
+* README: "In CI" section with a GitHub Actions example and exit codes.
+
 ## 1.1.0
 
 Accuracy, API and tooling overhaul. Source compatible with 1.0; scan

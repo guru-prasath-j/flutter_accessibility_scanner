@@ -521,6 +521,87 @@ void main() {
       expect(summary, contains('high: 1'));
       expect(summary, contains('medium: 1'));
     });
+
+    test('passes() gates on severity', () {
+      expect(report.passes(), isFalse);
+      expect(
+        report.passes(failOn: AccessibilityIssueSeverity.critical),
+        isFalse,
+      );
+      final mild = AccessibilityReport(
+        timestamp: DateTime(2026),
+        totalIssues: 1,
+        issues: [issues[2]],
+      );
+      expect(mild.passes(), isTrue);
+      expect(mild.passes(failOn: AccessibilityIssueSeverity.low), isFalse);
+    });
+
+    test('JSON includes counts and round-trips', () {
+      final detailed = AccessibilityReport(
+        timestamp: DateTime.utc(2026, 10, 5),
+        totalIssues: 1,
+        scannedElements: 42,
+        scanDuration: const Duration(milliseconds: 7),
+        issues: const [
+          AccessibilityIssue(
+            type: AccessibilityIssueType.poorColorContrast,
+            description: 'Low contrast',
+            severity: AccessibilityIssueSeverity.high,
+            suggestion: 'Use #595959',
+            wcagCriterion: '1.4.3 Contrast (Minimum)',
+            metadata: {'contrastRatio': 2.5},
+            bounds: Rect.fromLTRB(1, 2, 3, 4),
+          ),
+        ],
+      );
+      final map = detailed.toMap();
+      expect(map['schemaVersion'], AccessibilityReport.jsonSchemaVersion);
+      expect(
+        (map['issuesByType'] as Map<String, int>)['poorColorContrast'],
+        1,
+      );
+      expect(map['issuesByWcagCriterion'], {'1.4.3 Contrast (Minimum)': 1});
+
+      final copy = AccessibilityReport.fromJson(detailed.toJson(pretty: true));
+      expect(copy.timestamp, detailed.timestamp);
+      expect(copy.scannedElements, 42);
+      expect(copy.scanDuration, const Duration(milliseconds: 7));
+      final issue = copy.issues.single;
+      expect(issue.type, AccessibilityIssueType.poorColorContrast);
+      expect(issue.severity, AccessibilityIssueSeverity.high);
+      expect(issue.wcagCriterion, '1.4.3 Contrast (Minimum)');
+      expect(issue.bounds, const Rect.fromLTRB(1, 2, 3, 4));
+      expect(issue.metadata, {'contrastRatio': 2.5});
+    });
+
+    test('fromJson accepts short enum names and rejects unknown ones', () {
+      final issue = AccessibilityIssue.fromJson(const {
+        'type': 'smallTapTarget',
+        'severity': 'medium',
+        'description': 'Too small',
+      });
+      expect(issue.type, AccessibilityIssueType.smallTapTarget);
+      expect(
+        () => AccessibilityIssue.fromJson(const {
+          'type': 'nope',
+          'severity': 'medium',
+        }),
+        throwsFormatException,
+      );
+    });
+
+    test('renders Markdown', () {
+      final markdown = report.toMarkdown();
+      expect(markdown, contains('**3 issues** found.'));
+      expect(markdown, contains('| critical | poorColorContrast |'));
+      final clean = AccessibilityReport(
+        timestamp: DateTime(2026),
+        totalIssues: 0,
+        issues: const [],
+      );
+      expect(clean.toMarkdown(), isNot(contains('|')));
+    });
   });
 }
 

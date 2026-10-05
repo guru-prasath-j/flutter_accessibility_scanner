@@ -1,6 +1,6 @@
 name: flutter_accessibility_scanner
 description: Scan Flutter widget trees for WCAG 2.1 accessibility issues (missing labels, low contrast, small tap targets, focus) with fix hints and JSON reports.
-version: 1.1.0
+version: 1.2.0
 homepage: https://github.com/guru-prasath-j/flutter_accessibility_scanner
 repository: https://github.com/guru-prasath-j/flutter_accessibility_scanner
 issue_tracker: https://github.com/guru-prasath-j/flutter_accessibility_scanner/issues
