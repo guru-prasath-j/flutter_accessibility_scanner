@@ -1,12 +1,15 @@
 # Render Blueprint: deploys the example app as a static Flutter web site.
 # Render's build image has no Flutter SDK, so the build step fetches it.
+# $HOME is kept in Render's build cache, so only clone when it is missing.
 services:
   - type: web
     name: flutter-accessibility-scanner-demo
     runtime: static
     autoDeploy: true
     buildCommand: >-
-      git clone https://github.com/flutter/flutter.git --depth 1 --branch 3.41.7 "$HOME/flutter" &&
+      ( [ -x "$HOME/flutter/bin/flutter" ] ||
+        ( rm -rf "$HOME/flutter" &&
+          git clone https://github.com/flutter/flutter.git --depth 1 --branch 3.41.7 "$HOME/flutter" ) ) &&
       export PATH="$HOME/flutter/bin:$PATH" &&
       flutter config --no-analytics &&
       cd example &&
