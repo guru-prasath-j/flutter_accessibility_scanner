@@ -7,9 +7,16 @@ void main() {
 
 /// Demo app. The floating accessibility button (debug builds) scans the
 /// current screen and outlines every issue it finds.
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   /// Creates the demo app.
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.system;
 
   static ThemeData _theme(Brightness brightness) {
     final scheme = ColorScheme.fromSeed(
@@ -57,11 +64,15 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
+      themeMode: _themeMode,
       builder: (context, child) => AccessibilityScannerWidget(
         onReport: (report) => debugPrint(report.summary),
         child: child!,
       ),
-      home: const MyHomePage(),
+      home: MyHomePage(
+        themeMode: _themeMode,
+        onThemeModeChanged: (mode) => setState(() => _themeMode = mode),
+      ),
     );
   }
 }
@@ -69,7 +80,18 @@ class MyApp extends StatelessWidget {
 /// A page with deliberately good and bad examples side by side.
 class MyHomePage extends StatefulWidget {
   /// Creates the page.
-  const MyHomePage({super.key});
+  const MyHomePage({
+    super.key,
+    this.themeMode = ThemeMode.system,
+    this.onThemeModeChanged,
+  });
+
+  /// The app's current theme mode, shown by the theme toggle.
+  final ThemeMode themeMode;
+
+  /// Called when the user picks another theme mode. The toggle is hidden
+  /// when this is null.
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -92,6 +114,14 @@ class _MyHomePageState extends State<MyHomePage> {
             const Text('Accessibility Scanner Demo'),
           ],
         ),
+        actions: [
+          if (widget.onThemeModeChanged != null)
+            _ThemeToggle(
+              mode: widget.themeMode,
+              onChanged: widget.onThemeModeChanged!,
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
       // A non-lazy scroll view so every example is built (and scanned), not
       // just the ones currently on screen.
@@ -204,6 +234,29 @@ class _MyHomePageState extends State<MyHomePage> {
       _scanning = false;
     });
     _showSnackBar('Scan complete: ${report.totalIssues} issues found');
+  }
+}
+
+/// Cycles System → Light → Dark. Each option has an icon and a tooltip, so
+/// the button is labelled for screen readers too.
+class _ThemeToggle extends StatelessWidget {
+  const _ThemeToggle({required this.mode, required this.onChanged});
+
+  final ThemeMode mode;
+  final ValueChanged<ThemeMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, label, next) = switch (mode) {
+      ThemeMode.system => (Icons.brightness_auto, 'System', ThemeMode.light),
+      ThemeMode.light => (Icons.light_mode, 'Light', ThemeMode.dark),
+      ThemeMode.dark => (Icons.dark_mode, 'Dark', ThemeMode.system),
+    };
+    return IconButton(
+      icon: Icon(icon),
+      tooltip: 'Theme: $label (tap to change)',
+      onPressed: () => onChanged(next),
+    );
   }
 }
 
