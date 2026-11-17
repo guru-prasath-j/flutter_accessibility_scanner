@@ -1,0 +1,19 @@
+# Render Blueprint: deploys the example app as a static Flutter web site.
+# Render's build image has no Flutter SDK, so the build step fetches it.
+services:
+  - type: web
+    name: flutter-accessibility-scanner-demo
+    runtime: static
+    autoDeploy: true
+    buildCommand: >-
+      git clone https://github.com/flutter/flutter.git --depth 1 --branch 3.41.7 "$HOME/flutter" &&
+      export PATH="$HOME/flutter/bin:$PATH" &&
+      flutter config --no-analytics &&
+      cd example &&
+      flutter pub get &&
+      flutter build web --release
+    staticPublishPath: example/build/web
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
