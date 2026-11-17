@@ -6,15 +6,9 @@ services:
     name: flutter-accessibility-scanner-demo
     runtime: static
     autoDeploy: true
-    buildCommand: >-
-      ( [ -x "$HOME/flutter/bin/flutter" ] ||
-        ( rm -rf "$HOME/flutter" &&
-          git clone https://github.com/flutter/flutter.git --depth 1 --branch 3.41.7 "$HOME/flutter" ) ) &&
-      export PATH="$HOME/flutter/bin:$PATH" &&
-      flutter config --no-analytics &&
-      cd example &&
-      flutter pub get &&
-      flutter build web --release
+    # Build steps live in the script so they can change without editing
+    # the service settings.
+    buildCommand: bash tool/render_build.sh
     staticPublishPath: example/build/web
     routes:
       - type: rewrite
