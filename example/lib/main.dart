@@ -1,8 +1,52 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_accessibility_scanner/flutter_accessibility_scanner.dart';
 
+import 'scanner_page.dart';
+import 'settings_page.dart';
+import 'theme.dart';
+
 void main() {
   runApp(const MyApp());
+}
+
+/// Options the Settings tab changes; passed straight to
+/// [AccessibilityScannerWidget] and the manual scan.
+@immutable
+class ScannerSettings {
+  /// Creates scanner settings.
+  const ScannerSettings({
+    this.overlayEnabled = kDebugMode,
+    this.showHighlights = true,
+    this.minimumSeverity = AccessibilityIssueSeverity.low,
+    this.overlayDuration = const Duration(seconds: 5),
+  });
+
+  /// Whether the floating scan button is shown.
+  final bool overlayEnabled;
+
+  /// Whether issues are outlined on screen after a scan.
+  final bool showHighlights;
+
+  /// Issues below this severity are ignored.
+  final AccessibilityIssueSeverity minimumSeverity;
+
+  /// How long overlay results stay visible; zero keeps them until closed.
+  final Duration overlayDuration;
+
+  /// Returns a copy with the given fields replaced.
+  ScannerSettings copyWith({
+    bool? overlayEnabled,
+    bool? showHighlights,
+    AccessibilityIssueSeverity? minimumSeverity,
+    Duration? overlayDuration,
+  }) =>
+      ScannerSettings(
+        overlayEnabled: overlayEnabled ?? this.overlayEnabled,
+        showHighlights: showHighlights ?? this.showHighlights,
+        minimumSeverity: minimumSeverity ?? this.minimumSeverity,
+        overlayDuration: overlayDuration ?? this.overlayDuration,
+      );
 }
 
 /// Demo app. The floating accessibility button (debug builds) scans the
@@ -17,44 +61,12 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.system;
+  ScannerSettings _settings = const ScannerSettings();
+  AccessibilityReport? _lastReport;
 
-  static ThemeData _theme(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF3949AB),
-      brightness: brightness,
-    );
-    return ThemeData(
-      colorScheme: scheme,
-      scaffoldBackgroundColor: scheme.surfaceContainerLowest,
-      appBarTheme: AppBarTheme(
-        backgroundColor: scheme.surface,
-        foregroundColor: scheme.onSurface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        centerTitle: false,
-      ),
-      cardTheme: CardThemeData(
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        color: scheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: scheme.outlineVariant),
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-      ),
-      snackBarTheme:
-          const SnackBarThemeData(behavior: SnackBarBehavior.floating),
-    );
+  void _onReport(AccessibilityReport report) {
+    debugPrint(report.summary);
+    setState(() => _lastReport = report);
   }
 
   @override
@@ -62,577 +74,230 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       title: 'Accessibility Scanner Demo',
       debugShowCheckedModeBanner: false,
-      theme: _theme(Brightness.light),
-      darkTheme: _theme(Brightness.dark),
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       themeMode: _themeMode,
       builder: (context, child) => AccessibilityScannerWidget(
-        onReport: (report) => debugPrint(report.summary),
+        enabled: _settings.overlayEnabled,
+        showHighlights: _settings.showHighlights,
+        minimumSeverity: _settings.minimumSeverity,
+        overlayDuration: _settings.overlayDuration,
+        onReport: _onReport,
         child: child!,
       ),
-      home: MyHomePage(
+      home: HomeShell(
         themeMode: _themeMode,
         onThemeModeChanged: (mode) => setState(() => _themeMode = mode),
+        settings: _settings,
+        onSettingsChanged: (s) => setState(() => _settings = s),
+        lastReport: _lastReport,
+        onReport: _onReport,
       ),
     );
   }
 }
 
-/// A page with deliberately good and bad examples side by side.
-class MyHomePage extends StatefulWidget {
-  /// Creates the page.
-  const MyHomePage({
+/// Scanner / Settings tabs with a bottom navigation bar.
+class HomeShell extends StatefulWidget {
+  /// Creates the shell.
+  const HomeShell({
     super.key,
-    this.themeMode = ThemeMode.system,
-    this.onThemeModeChanged,
+    required this.themeMode,
+    required this.onThemeModeChanged,
+    required this.settings,
+    required this.onSettingsChanged,
+    required this.lastReport,
+    required this.onReport,
   });
 
-  /// The app's current theme mode, shown by the theme toggle.
+  /// The app's current theme mode.
   final ThemeMode themeMode;
 
-  /// Called when the user picks another theme mode. The toggle is hidden
-  /// when this is null.
-  final ValueChanged<ThemeMode>? onThemeModeChanged;
+  /// Called when the user picks another theme mode.
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  /// Current scanner settings.
+  final ScannerSettings settings;
+
+  /// Called when a setting changes.
+  final ValueChanged<ScannerSettings> onSettingsChanged;
+
+  /// The most recent scan, from either the manual or the floating button.
+  final AccessibilityReport? lastReport;
+
+  /// Called with each manual scan's report.
+  final ValueChanged<AccessibilityReport> onReport;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomeShell> createState() => _HomeShellState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  AccessibilityReport? _report;
-  bool _scanning = false;
+class _HomeShellState extends State<HomeShell> {
+  int _index = 0;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 20,
-        title: Row(
-          children: [
-            Icon(Icons.accessibility_new, color: theme.colorScheme.primary),
-            const SizedBox(width: 12),
-            const Text('Accessibility Scanner Demo'),
-          ],
+    // Only the visible tab is built, so a scan never picks up the other one.
+    final page = switch (_index) {
+      0 => ScannerPage(
+          key: const ValueKey('scanner'),
+          themeMode: widget.themeMode,
+          onThemeModeChanged: widget.onThemeModeChanged,
+          settings: widget.settings,
+          report: widget.lastReport,
+          onReport: widget.onReport,
         ),
-        actions: [
-          if (widget.onThemeModeChanged != null)
-            _ThemeToggle(
-              mode: widget.themeMode,
-              onChanged: widget.onThemeModeChanged!,
+      _ => SettingsPage(
+          key: const ValueKey('settings'),
+          themeMode: widget.themeMode,
+          onThemeModeChanged: widget.onThemeModeChanged,
+          settings: widget.settings,
+          onSettingsChanged: widget.onSettingsChanged,
+          lastReport: widget.lastReport,
+          onOpenScanner: () => setState(() => _index = 0),
+        ),
+    };
+
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _index = 0);
+      },
+      child: Scaffold(
+        body: AmbientBackground(
+          child: SafeArea(
+            bottom: false,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: page,
             ),
-          const SizedBox(width: 8),
-        ],
+          ),
+        ),
+        bottomNavigationBar: _BottomNav(
+          index: _index,
+          onSelected: (i) => setState(() => _index = i),
+        ),
       ),
-      // A non-lazy scroll view so every example is built (and scanned), not
-      // just the ones currently on screen.
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
+    );
+  }
+}
+
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({required this.index, required this.onSelected});
+
+  final int index;
+  final ValueChanged<int> onSelected;
+
+  static const _items = [
+    (Icons.manage_search_rounded, Icons.search_rounded, 'Scanner'),
+    (Icons.settings_rounded, Icons.settings_outlined, 'Settings'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.colors.backgroundDeep,
+        border: Border(top: BorderSide(color: context.colors.border)),
+      ),
+      child: SafeArea(
+        top: false,
         child: Center(
+          heightFactor: 1,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 920),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _HeroCard(),
-                const SizedBox(height: 32),
-                const _SectionHeader(
-                  title: 'Live examples',
-                  subtitle: 'Each problem is shown next to its fixed version.',
-                ),
-                const SizedBox(height: 16),
-                _ComparisonRow(
-                  bad: _ExampleCard(
-                    good: false,
-                    title: 'Tiny, unlabeled button',
-                    body: '30×30 px with no label — too small to tap and '
-                        'silent to screen readers.',
-                    preview: GestureDetector(
-                      onTap: () => _showSnackBar('Tapped bad button'),
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        color: Colors.grey[300],
-                        child: Icon(Icons.star, color: Colors.grey[400]),
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: SizedBox(
+              height: 72,
+              child: Row(
+                children: [
+                  for (var i = 0; i < _items.length; i++)
+                    Expanded(
+                      child: _NavItem(
+                        selectedIcon: _items[i].$1,
+                        icon: _items[i].$2,
+                        label: _items[i].$3,
+                        selected: i == index,
+                        onTap: () => onSelected(i),
                       ),
                     ),
-                  ),
-                  good: _ExampleCard(
-                    good: true,
-                    title: 'AccessibilityFixerButton',
-                    body: '48×48 px minimum, with a semantic label and hint.',
-                    preview: AccessibilityFixerButton(
-                      onPressed: () => _showSnackBar('Tapped good button'),
-                      semanticsLabel: 'Add to favorites',
-                      semanticsHint: 'Adds this item to your favorites list',
-                      child: Icon(Icons.star, color: theme.colorScheme.primary),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _ComparisonRow(
-                  bad: _ExampleCard(
-                    good: false,
-                    title: 'Low-contrast text',
-                    body: 'Light grey on white falls below the WCAG AA '
-                        'ratio of 4.5:1.',
-                    preview: Text(
-                      'This text has poor contrast and is hard to read',
-                      style: TextStyle(color: Colors.grey[400]),
-                    ),
-                  ),
-                  good: _ExampleCard(
-                    good: true,
-                    title: 'AccessibilityFixerText',
-                    body: 'Same colour, darkened just enough to pass.',
-                    preview: AccessibilityFixerText(
-                      text: 'This text is darkened just enough to pass WCAG AA',
-                      style: TextStyle(color: Colors.grey[400], fontSize: 16),
-                      backgroundColor: theme.colorScheme.surfaceContainerLow,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                const _SectionHeader(
-                  title: 'Scan this screen',
-                  subtitle: 'Runs every detector against the widgets above.',
-                ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: _scanning ? null : _performManualScan,
-                  icon: _scanning
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.manage_search),
-                  label: const Text('Run manual accessibility scan'),
-                ),
-                if (_report != null) ...[
-                  const SizedBox(height: 24),
-                  _ReportView(report: _report!),
                 ],
-              ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Future<void> _performManualScan() async {
-    setState(() => _scanning = true);
-    final report = await AccessibilityScanner().scan(context);
-    if (!mounted) return;
-    setState(() {
-      _report = report;
-      _scanning = false;
-    });
-    _showSnackBar('Scan complete: ${report.totalIssues} issues found');
-  }
 }
 
-/// Cycles System → Light → Dark. Each option has an icon and a tooltip, so
-/// the button is labelled for screen readers too.
-class _ThemeToggle extends StatelessWidget {
-  const _ThemeToggle({required this.mode, required this.onChanged});
-
-  final ThemeMode mode;
-  final ValueChanged<ThemeMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final (icon, label, next) = switch (mode) {
-      ThemeMode.system => (Icons.brightness_auto, 'System', ThemeMode.light),
-      ThemeMode.light => (Icons.light_mode, 'Light', ThemeMode.dark),
-      ThemeMode.dark => (Icons.dark_mode, 'Dark', ThemeMode.system),
-    };
-    return IconButton(
-      icon: Icon(icon),
-      tooltip: 'Theme: $label (tap to change)',
-      onPressed: () => onChanged(next),
-    );
-  }
-}
-
-class _HeroCard extends StatelessWidget {
-  const _HeroCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Catch accessibility issues before your users do',
-            style: text.headlineSmall?.copyWith(
-              color: scheme.onPrimaryContainer,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'WCAG 2.1 checks for missing labels, low contrast, small tap '
-            'targets and focus support — with a fix hint for every issue.',
-            style: text.bodyLarge?.copyWith(color: scheme.onPrimaryContainer),
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final (icon, label) in const [
-                (Icons.label_outline, 'Labels'),
-                (Icons.contrast, 'Contrast'),
-                (Icons.touch_app_outlined, 'Tap targets'),
-                (Icons.keyboard_outlined, 'Focus'),
-              ])
-                Chip(
-                  avatar: Icon(icon, size: 18, color: scheme.primary),
-                  label: Text(label),
-                  labelStyle: TextStyle(color: scheme.onSurface),
-                  backgroundColor: scheme.surface,
-                  side: BorderSide.none,
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style:
-              theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-}
-
-/// Side by side on wide screens, stacked on narrow ones.
-class _ComparisonRow extends StatelessWidget {
-  const _ComparisonRow({required this.bad, required this.good});
-
-  final Widget bad;
-  final Widget good;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 640) {
-          return Column(children: [bad, const SizedBox(height: 12), good]);
-        }
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: bad),
-              const SizedBox(width: 16),
-              Expanded(child: good),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ExampleCard extends StatelessWidget {
-  const _ExampleCard({
-    required this.good,
-    required this.title,
-    required this.body,
-    required this.preview,
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
   });
 
-  final bool good;
-  final String title;
-  final String body;
-  final Widget preview;
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final badgeBg = good ? const Color(0xFFDCF5E3) : scheme.errorContainer;
-    final badgeFg = good ? const Color(0xFF0F5323) : scheme.onErrorContainer;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+    final color =
+        selected ? context.colors.accent : context.colors.textSecondary;
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+              height: 3,
+              width: selected ? 56 : 0,
               decoration: BoxDecoration(
-                color: badgeBg,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    good ? Icons.check_circle : Icons.error,
-                    size: 16,
-                    color: badgeFg,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    good ? 'Accessible' : 'Problem',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: badgeFg,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+                gradient: AppColors.brandGradient,
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(3)),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(
+                              alpha: 0.7 * context.colors.glowStrength),
+                          blurRadius: 10,
+                        ),
+                      ]
+                    : null,
               ),
             ),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+            const Spacer(),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                selected ? selectedIcon : icon,
+                key: ValueKey(selected),
+                color: color,
+                size: 26,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
-              body,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              constraints: const BoxConstraints(minHeight: 88),
-              padding: const EdgeInsets.all(16),
-              alignment: Alignment.centerLeft,
-              decoration: BoxDecoration(
-                color: good ? scheme.surfaceContainerLow : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: preview,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ReportView extends StatelessWidget {
-  const _ReportView({required this.report});
-
-  final AccessibilityReport report;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final counts = {
-      for (final s in AccessibilityIssueSeverity.values.reversed)
-        s: report.issues.where((i) => i.severity == s).length,
-    };
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Found ${report.totalIssues} issues',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                if (report.scannedElements != null ||
-                    report.scanDuration != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    [
-                      if (report.scannedElements != null)
-                        '${report.scannedElements} elements scanned',
-                      if (report.scanDuration != null)
-                        'in ${report.scanDuration!.inMilliseconds} ms',
-                    ].join(' '),
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: scheme.onSurfaceVariant),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final e in counts.entries)
-                      _SeverityPill(severity: e.key, count: e.value),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (report.issues.isEmpty)
-          Card(
-            child: ListTile(
-              leading: Icon(Icons.verified, color: scheme.primary),
-              title: const Text('No issues — this screen looks accessible.'),
-            ),
-          )
-        else
-          for (final issue in report.issues) ...[
-            _IssueCard(issue: issue),
-            const SizedBox(height: 8),
-          ],
-      ],
-    );
-  }
-}
-
-(Color, Color) _severityColors(
-  AccessibilityIssueSeverity severity,
-  ColorScheme scheme,
-) =>
-    switch (severity) {
-      AccessibilityIssueSeverity.critical ||
-      AccessibilityIssueSeverity.high =>
-        (scheme.errorContainer, scheme.onErrorContainer),
-      AccessibilityIssueSeverity.medium => (
-          scheme.tertiaryContainer,
-          scheme.onTertiaryContainer
-        ),
-      AccessibilityIssueSeverity.low => (
-          scheme.secondaryContainer,
-          scheme.onSecondaryContainer
-        ),
-    };
-
-String _capitalize(String s) => '${s[0].toUpperCase()}${s.substring(1)}';
-
-class _SeverityPill extends StatelessWidget {
-  const _SeverityPill({required this.severity, required this.count});
-
-  final AccessibilityIssueSeverity severity;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final (bg, fg) = _severityColors(severity, Theme.of(context).colorScheme);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '${_capitalize(severity.name)}  $count',
-        style: TextStyle(color: fg, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
-
-class _IssueCard extends StatelessWidget {
-  const _IssueCard({required this.issue});
-
-  final AccessibilityIssue issue;
-
-  static IconData _iconFor(AccessibilityIssueType type) => switch (type) {
-        AccessibilityIssueType.missingSemanticsLabel =>
-          Icons.label_off_outlined,
-        AccessibilityIssueType.poorColorContrast => Icons.contrast,
-        AccessibilityIssueType.smallTapTarget => Icons.touch_app_outlined,
-        AccessibilityIssueType.missingFocusSupport => Icons.keyboard_outlined,
-        AccessibilityIssueType.missingScreenReaderHint =>
-          Icons.record_voice_over_outlined,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final (bg, fg) = _severityColors(issue.severity, scheme);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(_iconFor(issue.type), color: fg, size: 22),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    issue.description,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  if (issue.suggestion != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      issue.suggestion!,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Text(
-                    '${_capitalize(issue.severity.name)} · '
-                    'WCAG ${issue.wcagCriterion ?? '-'}',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: fg,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
               ),
             ),
+            const Spacer(),
           ],
         ),
       ),

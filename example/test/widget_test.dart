@@ -23,6 +23,39 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
   });
 
+  testWidgets('settings tab shows options and changes them', (tester) async {
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MyApp());
+    await tester.tap(find.text('Settings').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Floating scan button'), findsOneWidget);
+    expect(find.text('Semantic labels'), findsOneWidget);
+    expect(find.text('1.2.0'), findsOneWidget);
+
+    Switch highlights() => tester.widget<Switch>(find.descendant(
+          of: find.ancestor(
+            of: find.text('Highlight issues'),
+            matching: find.byType(InkWell),
+          ),
+          matching: find.byType(Switch),
+        ));
+    expect(highlights().value, isTrue);
+    await tester.tap(find.text('Highlight issues'));
+    await tester.pumpAndSettle();
+    expect(highlights().value, isFalse);
+
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    expect(
+      Theme.of(tester.element(find.byType(Scaffold))).brightness,
+      Brightness.dark,
+    );
+  });
+
   testWidgets('theme toggle cycles system, light and dark', (tester) async {
     await tester.pumpWidget(const MyApp());
 
